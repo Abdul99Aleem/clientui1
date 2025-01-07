@@ -20,7 +20,9 @@
 #include "mainwindow.h"
 #include <QSlider>
 #include "conferancecallwindow.h"
+#include <messagewindow.h>
 #include <QStackedLayout>
+#include <QStackedWidget>
 
 struct ClientData {
     QString username;
@@ -31,8 +33,7 @@ struct ClientData {
 class ConferanceCallWindow;
 class MainWindow;
 
-class ClientWindow : public QMainWindow
-{
+class ClientWindow : public QMainWindow {
     Q_OBJECT
 
 public:
@@ -51,15 +52,22 @@ public:
     void onLogoutBtnClicked();
     void onExitBtnClicked();
     QList<QString> getSelectedClients();
+
 public slots:
     void handleIncomingCall(const QString &caller);
     void onCallAccepted();
     void onCallRejected();
+    void removeMessageWindow(const QString &username);
+    void showHomeScreen();
+    void showMessageScreen(const QString &username);
+
 private:
     void setupCallLayouts();
     void connectSignals();
     void loadThemePreference();
     void saveThemePreference();
+    void setupUI();
+    void setupConnections();
     QString getDarkThemeStyleSheet();
     QString getLightThemeStyleSheet();
     void toggleTheme();
@@ -70,6 +78,13 @@ private:
     void initiateConferenceCall(const QList<QString>& participants);
     void toggleConferenceMode();
     QPixmap getStatusIcon(const QString &status);
+
+    // Message window related
+    QMap<QString, MessageWindow*> messageWindows;
+    void openMessageWindow(const QString &username);
+    QStackedWidget *mainStack;
+    QWidget *homeScreen;
+    QWidget *rightPanel;
 
     bool isDarkTheme = false;
     QWidget *mainWidget;

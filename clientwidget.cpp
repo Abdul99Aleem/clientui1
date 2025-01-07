@@ -9,6 +9,8 @@ ClientWidget::ClientWidget(const QString &username, const QString &status, QWidg
     statusCircle = new QLabel(this);
     usernameLabel = new QLabel(username, this);
     callButton = new QPushButton("Call", this);
+    messageButton = new QPushButton("Msg", this);
+    messageButton->setFixedWidth(60);
 
     // Update status circle
     updateStatusCircle(status);
@@ -17,12 +19,19 @@ ClientWidget::ClientWidget(const QString &username, const QString &status, QWidg
     QHBoxLayout *mainLayout = new QHBoxLayout(this);
     mainLayout->addWidget(statusCircle);
     mainLayout->addWidget(usernameLabel);
+    mainLayout->addWidget(messageButton);
     mainLayout->addWidget(callButton);
     mainLayout->setSpacing(10);
     setLayout(mainLayout);
 
     // Connect button signal to slot
     connect(callButton, &QPushButton::clicked, this, &ClientWidget::onCallButtonClicked);
+    connect(messageButton, &QPushButton::clicked, this, &ClientWidget::onMessageButtonClicked);
+}
+
+void ClientWidget::onMessageButtonClicked()
+{
+    emit messageButtonClicked(clientUsername);
 }
 
 void ClientWidget::onCallButtonClicked()

@@ -21,7 +21,7 @@
 #include "mainwindow.h"
 #include <QSlider>
 
-    class ConferanceCallWindow : public QMainWindow
+class ConferanceCallWindow : public QMainWindow
 {
     Q_OBJECT
 public:

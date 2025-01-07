@@ -7,7 +7,7 @@
 #include <QPushButton>
 #include <QHBoxLayout>
 
-    class ClientWidget : public QWidget
+class ClientWidget : public QWidget
 {
     Q_OBJECT
 
@@ -16,13 +16,15 @@ public:
 
 signals:
     void callButtonClicked(const QString &username);
+    void messageButtonClicked(const QString &username);
 
 private slots:
     void onCallButtonClicked();
 
 private:
     void updateStatusCircle(const QString &status);
-
+    QPushButton *messageButton;
+    void onMessageButtonClicked();
     QLabel *statusCircle;
     QLabel *usernameLabel;
     QPushButton *callButton;

@@ -1,3 +1,4 @@
+//clientwindow.cpp
 #include "clientwindow.h"
 #include <QObject>
 #include <QWidget>
@@ -35,18 +36,14 @@ ClientWindow::ClientWindow(MainWindow *mainwindow, QWidget *parent)
     topBox = new QHBoxLayout();
     clientBox = new QHBoxLayout();
     makeConfCallLayout = new QHBoxLayout();
-    incomingCallLayout = new QVBoxLayout();
-    ongoingCallLayout = new QVBoxLayout();
-    noCallLayout = new QVBoxLayout();
-    outgoingCallLayout = new QVBoxLayout();
     MidBox = new QHBoxLayout();
     mainLayout = new QVBoxLayout();
 
-    // Create widgets for different call states
-    noCallWidget = new QWidget(this);
-    incomingCallWidget = new QWidget(this);
-    ongoingCallWidget = new QWidget(this);
-    outgoingCallWidget = new QWidget(this);
+    // Initialize stacked widget for main content
+    mainStack = new QStackedWidget(this);
+
+    // Create call state widgets
+    setupCallLayouts();
 
     // Volume slider setup
     QSlider *volumeSlider = new QSlider(Qt::Horizontal, this);
@@ -78,57 +75,59 @@ ClientWindow::ClientWindow(MainWindow *mainwindow, QWidget *parent)
     clients.append({"phone3", "1003", "Busy"});
     clientList = new QListWidget(this);
     populateList();
-    clientBox->addWidget(clientList);
 
-    setupCallLayouts();
+    // Create left panel
+    QWidget *leftPanel = new QWidget(this);
+    QVBoxLayout *leftLayout = new QVBoxLayout(leftPanel);
+    leftLayout->addWidget(clientList);
+
+    // Create right panel
+    QWidget *rightPanel = new QWidget(this);
+    QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
+    rightLayout->addWidget(mainStack);
+
+    // Setup conference UI
     setupConferenceUI();
 
     // Main layout setup
-    MidBox->addLayout(clientBox, 2);
-    MidBox->addLayout(callLayoutsStack, 1);
+    MidBox->addWidget(leftPanel, 1);
+    MidBox->addWidget(rightPanel, 2);
+
     mainLayout->addLayout(topBox);
     mainLayout->addLayout(MidBox);
     mainLayout->addLayout(makeConfCallLayout);
     mainWidget->setLayout(mainLayout);
 
+    // Connect signals and apply theme
     connectSignals();
     loadThemePreference();
     applyTheme(isDarkTheme);
-}
 
-ClientWindow::~ClientWindow() {
-    delete mainWidget;
-    delete clientStatusCircle;
-    delete clientName;
-    delete themeBtn;
-    delete exitBtn;
-    delete logout;
-    delete clientList;
-    delete noCallLabel;
-    delete incomingCallLabel;
-    delete incomingClientLabel;
-    delete ongoingClientLabel;
-    delete outgoingCallLabel;
-    delete outgoingClientLabel;
-    delete noCallWidget;
-    delete incomingCallWidget;
-    delete outgoingCallWidget;
-    delete ongoingCallWidget;
-    delete acceptCall_btn;
-    delete rejectCall_btn;
-    delete leaveCall_btn;
-    delete endCall_btn;
-    //delete MakeConfCall_btn;
-    delete conferencePanel;
-    delete selectAllCheckbox;
-    delete startConferenceBtn;
-}
+    // Set layout properties
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    mainLayout->setContentsMargins(15, 15, 15, 15);
+    mainLayout->setSpacing(10);
+    clientList->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
+    // Set button properties
+    themeBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    exitBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    logout->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    themeBtn->setMinimumHeight(40);
+    exitBtn->setMinimumHeight(40);
+    logout->setMinimumHeight(40);
+}
 void ClientWindow::setupCallLayouts() {
+    // No call layout
+    noCallWidget = new QWidget(this);
+    noCallLayout = new QVBoxLayout(noCallWidget);
     noCallLabel = new QLabel("NO active calls", this);
     noCallLayout->addWidget(noCallLabel);
-    noCallWidget->setLayout(noCallLayout);
+    mainStack->addWidget(noCallWidget);
 
+    // Incoming call layout
+    incomingCallWidget = new QWidget(this);
+    incomingCallLayout = new QVBoxLayout(incomingCallWidget);
     incomingCallLabel = new QLabel("Incoming call....", this);
     incomingClientLabel = new QLabel("Client Name", this);
     acceptCall_btn = new QPushButton("Accept Call", this);
@@ -137,41 +136,124 @@ void ClientWindow::setupCallLayouts() {
     incomingCallLayout->addWidget(incomingClientLabel);
     incomingCallLayout->addWidget(acceptCall_btn);
     incomingCallLayout->addWidget(rejectCall_btn);
-    incomingCallWidget->setLayout(incomingCallLayout);
+    mainStack->addWidget(incomingCallWidget);
 
+    // Ongoing call layout
+    ongoingCallWidget = new QWidget(this);
+    ongoingCallLayout = new QVBoxLayout(ongoingCallWidget);
     ongoingClientLabel = new QLabel("Client Name", this);
     leaveCall_btn = new QPushButton("End Call", this);
     ongoingCallLayout->addWidget(ongoingClientLabel);
     ongoingCallLayout->addWidget(leaveCall_btn);
-    ongoingCallWidget->setLayout(ongoingCallLayout);
+    mainStack->addWidget(ongoingCallWidget);
 
+    // Outgoing call layout
+    outgoingCallWidget = new QWidget(this);
+    outgoingCallLayout = new QVBoxLayout(outgoingCallWidget);
     outgoingCallLabel = new QLabel("Ringing....", this);
     outgoingClientLabel = new QLabel("Client Name", this);
     endCall_btn = new QPushButton("End Call", this);
     outgoingCallLayout->addWidget(outgoingCallLabel);
     outgoingCallLayout->addWidget(outgoingClientLabel);
     outgoingCallLayout->addWidget(endCall_btn);
-    outgoingCallWidget->setLayout(outgoingCallLayout);
+    mainStack->addWidget(outgoingCallWidget);
 
-    //MakeConfCall_btn = new QPushButton("Make Conference Call", this);
-    //makeConfCallLayout->addWidget(MakeConfCall_btn);
+    // Set initial widget
+    mainStack->setCurrentWidget(noCallWidget);
+}
 
-    callLayoutsStack = new QStackedLayout();
-    callLayoutsStack->addWidget(noCallWidget);
-    callLayoutsStack->addWidget(incomingCallWidget);
-    callLayoutsStack->addWidget(ongoingCallWidget);
-    callLayoutsStack->addWidget(outgoingCallWidget);
+void ClientWindow::populateList() {
+    for (const auto &client : clients) {
+        QWidget *clientWidget = new QWidget(this);
+        QHBoxLayout *layout = new QHBoxLayout(clientWidget);
+        layout->setSpacing(10);
+        layout->setContentsMargins(5, 5, 5, 5);
+
+        QLabel *status = new QLabel(clientWidget);
+        status->setPixmap(getStatusIcon(client.status));
+        status->setFixedSize(16, 16);
+
+        QLabel *username = new QLabel(client.username, clientWidget);
+        username->setMinimumWidth(100);
+
+        QCheckBox *selectBox = new QCheckBox(clientWidget);
+        selectBox->hide();
+
+        QPushButton *msgBtn = new QPushButton("Msg", clientWidget);
+        msgBtn->setFixedWidth(60);
+        connect(msgBtn, &QPushButton::clicked, this, [this, username]() {
+            showMessageScreen(username->text());
+        });
+
+        QPushButton *callBtn = new QPushButton("Call", clientWidget);
+        callBtn->setFixedWidth(60);
+        connect(callBtn, &QPushButton::clicked, this, [this, username]() {
+            currentClient = username->text();
+            onCallBtnClicked();
+        });
+
+        layout->addWidget(status);
+        layout->addWidget(username, 1);
+        layout->addWidget(selectBox);
+        layout->addWidget(msgBtn);
+        layout->addWidget(callBtn);
+        layout->addStretch();
+
+        QListWidgetItem *item = new QListWidgetItem(clientList);
+        item->setSizeHint(clientWidget->sizeHint());
+        clientList->setItemWidget(item, clientWidget);
+    }
+}
+void ClientWindow::showMessageScreen(const QString &username) {
+    if (!messageWindows.contains(username)) {
+        MessageWindow *window = new MessageWindow(username, isDarkTheme, this);
+        messageWindows[username] = window;
+        mainStack->addWidget(window);
+
+        connect(window, &MessageWindow::backButtonClicked, this, &ClientWindow::showHomeScreen);
+        connect(window, &MessageWindow::closed, this, [this, username]() {
+            removeMessageWindow(username);
+        });
+    }
+    mainStack->setCurrentWidget(messageWindows[username]);
+}
+
+void ClientWindow::showHomeScreen() {
+    mainStack->setCurrentWidget(noCallWidget);
+}
+
+void ClientWindow::removeMessageWindow(const QString &username) {
+    if (messageWindows.contains(username)) {
+        MessageWindow *window = messageWindows[username];
+        messageWindows.remove(username);
+        mainStack->removeWidget(window);
+        window->deleteLater();
+    }
+}
+
+void ClientWindow::switchToLayout(int index) {
+    switch(index) {
+    case 0: // No call
+        mainStack->setCurrentWidget(noCallWidget);
+        break;
+    case 1: // Incoming call
+        mainStack->setCurrentWidget(incomingCallWidget);
+        break;
+    case 2: // Ongoing call
+        mainStack->setCurrentWidget(ongoingCallWidget);
+        break;
+    case 3: // Outgoing call
+        mainStack->setCurrentWidget(outgoingCallWidget);
+        break;
+    }
 }
 
 void ClientWindow::setupConferenceUI() {
-    // Move conference toggle button to the main controls area
     QPushButton *conferenceToggle = new QPushButton("Conference Mode", this);
-    makeConfCallLayout->addWidget(conferenceToggle); // Use the existing makeConfCallLayout
+    makeConfCallLayout->addWidget(conferenceToggle);
 
     conferencePanel = new QWidget(this);
     QVBoxLayout *confLayout = new QVBoxLayout(conferencePanel);
-
-    // Add conference panel to the main layout to prevent shifting
     mainLayout->addWidget(conferencePanel);
 
     selectAllCheckbox = new QCheckBox("Select All", conferencePanel);
@@ -187,180 +269,6 @@ void ClientWindow::setupConferenceUI() {
     connect(startConferenceBtn, &QPushButton::clicked, this, &ClientWindow::startConference);
 }
 
-void ClientWindow::connectSignals() {
-    connect(acceptCall_btn, &QPushButton::clicked, this, &ClientWindow::onOngoingCall);
-    connect(leaveCall_btn, &QPushButton::clicked, [this]() { switchToLayout(0); });
-    connect(endCall_btn, &QPushButton::clicked, [this]() { switchToLayout(0); });
-    connect(rejectCall_btn, &QPushButton::clicked, [this]() { switchToLayout(0); });
-    connect(logout, &QPushButton::clicked, this, &ClientWindow::onLogoutBtnClicked);
-    connect(exitBtn, &QPushButton::clicked, this, &ClientWindow::onExitBtnClicked);
-    connect(themeBtn, &QPushButton::clicked, this, &ClientWindow::toggleTheme);
-}
-
-// Theme management methods
-void ClientWindow::toggleTheme() {
-    isDarkTheme = !isDarkTheme;
-    applyTheme(isDarkTheme);
-    saveThemePreference();
-}
-
-void ClientWindow::applyTheme(bool isDark) {
-    QString styleSheet = isDark ? getDarkThemeStyleSheet() : getLightThemeStyleSheet();
-    mainWidget->setStyleSheet(styleSheet);
-    QString statusCircleStyle = QString("border-radius: 12px; background-color: %1;")
-                                    .arg(isDark ? "#404040" : "#e0e0e0");
-    clientStatusCircle->setStyleSheet(statusCircleStyle);
-}
-
-QString ClientWindow::getLightThemeStyleSheet() {
-    return R"(
-        QWidget {
-            background-color: #E0E3DE;
-            font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 12px;
-        }
-        QPushButton {
-            background-color: #4A5D45;
-            color: #E0E3DE;
-            border: 1px solid #2F3E2C;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        QPushButton:hover {
-            background-color: #5B705A;
-        }
-        QPushButton[text="Call"] {
-            color: #FFFFFF;
-            font-weight: bold;
-            background-color: #445544;
-            min-width: 60px;
-        }
-        QPushButton[text="Call"]:hover {
-            background-color: #556655;
-        }
-        QListWidget {
-            background-color: #D3D7D1;
-            border-radius: 4px;
-            padding: 5px;
-            border: 1px solid #A3A69F;
-        }
-        QLineEdit {
-            padding: 8px;
-            border-radius: 4px;
-            border: 2px solid #A3A69F;
-            background-color: #D3D7D1;
-        }
-        QLineEdit:focus {
-            border: 2px solid #4A5D45;
-        }
-        QLabel {
-            color: #2F3E2C;
-            font-weight: 500;
-        }
-        QCheckBox {
-            spacing: 8px;
-        }
-QPushButton[text="Call"] {
-    color: #FFFFFF;
-
-    background-color: #445544;
-    min-width: 60px;
-    min-height: 25px;
-    font-size: 12px;
-    text-align: center;
-    padding: 2px 10px;
-    qproperty-alignment: AlignCenter;
-}
-
-QPushButton[text="Call"]:hover {
-    background-color: #556655;
-}
-    )";
-}
-
-QString ClientWindow::getDarkThemeStyleSheet() {
-    return R"(
-        QWidget {
-            background-color: #1E2922;
-            font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 12px;
-        }
-        QPushButton {
-            background-color: #3F4A3C;
-            color: #D3D7D1;
-            border: 1px solid #2F3E2C;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        QPushButton:hover {
-            background-color: #4A5D45;
-        }
-        QPushButton[text="Call"] {
-            color: #FFFFFF;
-            font-weight: bold;
-            background-color: #445544;
-            min-width: 60px;
-        }
-        QPushButton[text="Call"]:hover {
-            background-color: #556655;
-        }
-        QListWidget {
-            background-color: #2A362F;
-            border-radius: 4px;
-            padding: 5px;
-            border: 1px solid #3F4A3C;
-            color: #D3D7D1;
-        }
-        QLineEdit {
-            padding: 8px;
-            border-radius: 4px;
-            border: 2px solid #3F4A3C;
-            background-color: #2A362F;
-            color: #D3D7D1;
-        }
-        QLineEdit:focus {
-            border: 2px solid #4A5D45;
-        }
-        QLabel {
-            color: #D3D7D1;
-            font-weight: 500;
-        }
-        QCheckBox {
-            spacing: 8px;
-            color: #D3D7D1;
-        }
-QPushButton[text="Call"] {
-    color: #FFFFFF;
-    font-weight: bold;
-    background-color: #445544;
-    min-width: 60px;
-    min-height: 25px;
-    font-size: 12px;
-    text-align: center;
-    padding: 2px 10px;
-    qproperty-alignment: AlignCenter;
-}
-
-QPushButton[text="Call"]:hover {
-    background-color: #556655;
-}
-    )";
-}
-
-
-void ClientWindow::saveThemePreference() {
-    QSettings settings("YourCompany", "VoIPClient");
-    settings.setValue("darkTheme", isDarkTheme);
-}
-
-void ClientWindow::loadThemePreference() {
-    QSettings settings("YourCompany", "VoIPClient");
-    isDarkTheme = settings.value("darkTheme", false).toBool();
-}
-
-// Conference call methods
 void ClientWindow::handleSelectAll(Qt::CheckState state) {
     for (int i = 0; i < clientList->count(); i++) {
         QWidget *widget = clientList->itemWidget(clientList->item(i));
@@ -379,8 +287,6 @@ void ClientWindow::toggleConferenceMode() {
         QWidget *widget = clientList->itemWidget(clientList->item(i));
         widget->findChild<QCheckBox*>()->setVisible(isConferenceMode);
     }
-
-    //MakeConfCall_btn->setVisible(!isConferenceMode);
 }
 
 void ClientWindow::startConference() {
@@ -401,81 +307,51 @@ void ClientWindow::startConference() {
         return;
     }
 
-    // Directly start the conference call
     switchToLayout(2);
     ongoingClientLabel->setText("Conference Call: " + selectedClients.join(", "));
-
-    // Hide conference panel after starting the call
     conferencePanel->hide();
-
-    // Reset checkboxes
     selectAllCheckbox->setChecked(false);
     handleSelectAll(Qt::Unchecked);
 }
 
-
-void ClientWindow::initiateConferenceCall(const QList<QString>& participants) {
-    QString participantList = participants.join(", ");
-    QMessageBox::information(this, "Conference Call Started",
-                             "Starting conference call with: " + participantList);
-    switchToLayout(2);
-    ongoingClientLabel->setText("Conference Call: " + participantList);
+void ClientWindow::connectSignals() {
+    connect(acceptCall_btn, &QPushButton::clicked, this, &ClientWindow::onOngoingCall);
+    connect(leaveCall_btn, &QPushButton::clicked, [this]() { switchToLayout(0); });
+    connect(endCall_btn, &QPushButton::clicked, [this]() { switchToLayout(0); });
+    connect(rejectCall_btn, &QPushButton::clicked, [this]() { switchToLayout(0); });
+    connect(logout, &QPushButton::clicked, this, &ClientWindow::onLogoutBtnClicked);
+    connect(exitBtn, &QPushButton::clicked, this, &ClientWindow::onExitBtnClicked);
+    connect(themeBtn, &QPushButton::clicked, this, &ClientWindow::toggleTheme);
 }
 
-// Call management methods
-void ClientWindow::switchToLayout(int index) {
-    callLayoutsStack->setCurrentIndex(index);
-}
+void ClientWindow::toggleTheme() {
+    isDarkTheme = !isDarkTheme;
+    applyTheme(isDarkTheme);
+    saveThemePreference();
 
-void ClientWindow::onIncomingCall() {
-    switchToLayout(1);
-    incomingClientLabel->setText(currentClient);
-}
-
-void ClientWindow::onOngoingCall() {
-    switchToLayout(2);
-    ongoingClientLabel->setText(currentClient);
-}
-
-void ClientWindow::onCallBtnClicked() {
-    if (!currentClient.isEmpty()) {
-        outgoingClientLabel->setText(currentClient);
-        switchToLayout(3);
+    // Update theme for all message windows
+    for (auto window : messageWindows) {
+        window->updateTheme(isDarkTheme);
     }
 }
 
-// Client list management
-void ClientWindow::populateList() {
-    for (const auto &client : clients) {
-        QWidget *clientWidget = new QWidget(this);
-        QHBoxLayout *layout = new QHBoxLayout(clientWidget);
-
-        QLabel *status = new QLabel(clientWidget);
-        status->setPixmap(getStatusIcon(client.status));
-
-        QLabel *username = new QLabel(client.username, clientWidget);
-        QCheckBox *selectBox = new QCheckBox(clientWidget);
-        selectBox->hide();
-
-        QPushButton *callBtn = new QPushButton("Call", clientWidget);
-
-        // Add connection for call button
-        connect(callBtn, &QPushButton::clicked, this, [this, username]() {
-            currentClient = username->text();
-            onCallBtnClicked();
-        });
-
-        layout->addWidget(status);
-        layout->addWidget(username);
-        layout->addWidget(selectBox);
-        layout->addWidget(callBtn);
-
-        QListWidgetItem *item = new QListWidgetItem(clientList);
-        item->setSizeHint(clientWidget->sizeHint());
-        clientList->setItemWidget(item, clientWidget);
-    }
+void ClientWindow::applyTheme(bool isDark) {
+    QString styleSheet = isDark ? getDarkThemeStyleSheet() : getLightThemeStyleSheet();
+    mainWidget->setStyleSheet(styleSheet);
+    QString statusCircleStyle = QString("border-radius: 12px; background-color: %1;")
+                                    .arg(isDark ? "#404040" : "#e0e0e0");
+    clientStatusCircle->setStyleSheet(statusCircleStyle);
 }
 
+void ClientWindow::saveThemePreference() {
+    QSettings settings("YourCompany", "VoIPClient");
+    settings.setValue("darkTheme", isDarkTheme);
+}
+
+void ClientWindow::loadThemePreference() {
+    QSettings settings("YourCompany", "VoIPClient");
+    isDarkTheme = settings.value("darkTheme", false).toBool();
+}
 
 QPixmap ClientWindow::getStatusIcon(const QString &status) {
     QPixmap pixmap(16, 16);
@@ -497,6 +373,29 @@ QPixmap ClientWindow::getStatusIcon(const QString &status) {
     return pixmap;
 }
 
+void ClientWindow::handleIncomingCall(const QString &caller) {
+    currentClient = caller;
+    incomingClientLabel->setText(caller);
+    switchToLayout(1);
+}
+
+void ClientWindow::onCallAccepted() {
+    ongoingClientLabel->setText(currentClient);
+    switchToLayout(2);
+}
+
+void ClientWindow::onCallRejected() {
+    switchToLayout(0);
+    currentClient.clear();
+}
+
+void ClientWindow::onCallBtnClicked() {
+    if (!currentClient.isEmpty()) {
+        outgoingClientLabel->setText(currentClient);
+        switchToLayout(3);
+    }
+}
+
 void ClientWindow::onLogoutBtnClicked() {
     if (mainWindow) {
         if (!mainWindow->rememberMe->isChecked()) {
@@ -511,32 +410,71 @@ void ClientWindow::onExitBtnClicked() {
     QApplication::quit();
 }
 
-QList<QString> ClientWindow::getSelectedClients() {
-    QList<QString> selectedClients;
-    for (int i = 0; i < clientList->count(); ++i) {
-        QListWidgetItem *item = clientList->item(i);
-        if (item->checkState() == Qt::Checked) {
-            selectedClients.append(item->text());
+QString ClientWindow::getDarkThemeStyleSheet()
+{
+    return R"(
+        QWidget {
+            background-color: #1E2922;
+            color: #E0E3DE;
         }
-    }
-    return selectedClients;
+        QPushButton {
+            background-color: #3F4A3C;
+            border: 1px solid #2F3E2C;
+            padding: 5px;
+            border-radius: 4px;
+            color: white;
+        }
+        QListWidget {
+            background-color: #2A362F;
+            border: 1px solid #3F4A3C;
+        }
+    )";
 }
 
-// Add this method to handle incoming calls
-void ClientWindow::handleIncomingCall(const QString &caller) {
-    currentClient = caller;
-    incomingClientLabel->setText(caller);
-    switchToLayout(1);  // Switch to incoming call layout
+QString ClientWindow::getLightThemeStyleSheet()
+{
+    return R"(
+        QWidget {
+            background-color: #E0E3DE;
+            color: #2F3E2C;
+        }
+        QPushButton {
+            background-color: #4A5D45;
+            border: 1px solid #2F3E2C;
+            padding: 5px;
+            border-radius: 4px;
+            color: white;
+        }
+        QListWidget {
+            background-color: #FFFFFF;
+            border: 1px solid #A3A69F;
+        }
+    )";
 }
 
-void ClientWindow::onCallAccepted() {
+void ClientWindow::onOngoingCall()
+{
+    switchToLayout(2);
     ongoingClientLabel->setText(currentClient);
-    switchToLayout(2);  // Switch to ongoing call layout
-}
-
-void ClientWindow::onCallRejected() {
-    switchToLayout(0);  // Switch back to no call layout
-    currentClient.clear();
 }
 
 
+ClientWindow::~ClientWindow() {
+    // Clean up message windows
+    for (auto window : messageWindows) {
+        window->deleteLater();
+    }
+    messageWindows.clear();
+
+    // Clean up other widgets
+    delete mainWidget;
+    delete clientStatusCircle;
+    delete clientName;
+    delete themeBtn;
+    delete exitBtn;
+    delete logout;
+    delete clientList;
+    delete conferencePanel;
+    delete selectAllCheckbox;
+    delete startConferenceBtn;
+}

@@ -1,4 +1,5 @@
-QT += core gui
+QT += core gui \
+    quick
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
@@ -8,13 +9,15 @@ SOURCES += \
     mainwindow.cpp \
     clientwindow.cpp \
     clientwidget.cpp \
-    conferancecallwindow.cpp
+    conferancecallwindow.cpp \
+    messagewindow.cpp
 
 HEADERS += \
     mainwindow.h \
     clientwindow.h \
     clientwidget.h \
-    conferancecallwindow.h
+    conferancecallwindow.h \
+    messagewindow.h
 
 FORMS += \
     mainwindow.ui
