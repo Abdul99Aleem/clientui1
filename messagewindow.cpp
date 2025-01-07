@@ -6,6 +6,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMenu>
+const char* MessageWindow::DATE_FORMAT = "yyyy-MM-dd hh:mm:ss";
 
 MessageWindow::MessageWindow(const QString &username, bool isDarkTheme, QWidget *parent)
     : QWidget(parent), username(username), isDarkTheme(isDarkTheme)
@@ -25,6 +26,9 @@ MessageWindow::MessageWindow(const QString &username, bool isDarkTheme, QWidget 
 
 void MessageWindow::setupUI()
 {
+    setWindowFlags(Qt::FramelessWindowHint);
+    setAttribute(Qt::WA_OpaquePaintEvent);
+    setAttribute(Qt::WA_NoSystemBackground);
     mainLayout = new QVBoxLayout(this);
     mainLayout->setSpacing(10);
     mainLayout->setContentsMargins(10, 10, 10, 10);
@@ -66,6 +70,9 @@ void MessageWindow::setupUI()
 
     actionLayout->addWidget(clearButton);
     actionLayout->addWidget(exportButton);
+
+    messageHistory.reserve(MAX_HISTORY_SIZE);
+    setAttribute(Qt::WA_DeleteOnClose);
 
     // Add all layouts to main layout
     mainLayout->addLayout(headerLayout);
@@ -110,16 +117,22 @@ void MessageWindow::sendMessage()
 
 void MessageWindow::addMessage(const QString &sender, const QString &message)
 {
-    QString formattedMessage = formatMessage(sender, message);
-    chatDisplay->append(formattedMessage);
+    QMutexLocker locker(&chatMutex);
 
-    messageHistory.append(qMakePair(sender, message));
-    if (messageHistory.size() > MAX_HISTORY_SIZE) {
+    // Remove oldest message if history limit reached
+    if (messageHistory.size() >= MAX_HISTORY_SIZE) {
         messageHistory.removeFirst();
     }
 
-    scrollToBottom();
-    saveChatHistory();
+    // Format and display the message
+    QString formattedMessage = formatMessage(sender, message);
+    chatDisplay->append(formattedMessage);
+
+    // Store and save valid messages
+    if (!sender.isEmpty() && !message.isEmpty()) {
+        messageHistory.append(qMakePair(sender, message));
+        saveChatHistory();
+    }
 }
 
 QString MessageWindow::formatMessage(const QString &sender, const QString &message)
@@ -127,13 +140,13 @@ QString MessageWindow::formatMessage(const QString &sender, const QString &messa
     QDateTime currentTime = QDateTime::currentDateTime();
     QString timeStr = currentTime.toString(DATE_FORMAT);
 
-    QString formattedMsg = QString("<p><b>[%1] %2:</b> %3</p>")
-                               .arg(timeStr)
-                               .arg(sender)
-                               .arg(message);
-
-    return formattedMsg;
+    // Create formatted HTML message with timestamp
+    return QString("<p><b>[%1] %2:</b> %3</p>")
+        .arg(timeStr)
+        .arg(sender.toHtmlEscaped())
+        .arg(message.toHtmlEscaped());
 }
+
 
 void MessageWindow::scrollToBottom()
 {
@@ -283,21 +296,38 @@ void MessageWindow::saveChatHistory()
     QString filePath = getChatFilePath();
     QFile file(filePath);
 
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-        for (const auto &message : messageHistory) {
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qWarning() << "Failed to open chat history file for writing:" << filePath;
+        return;
+    }
+
+    QTextStream out(&file);
+    for (const auto &message : messageHistory) {
+        if (!message.first.isEmpty() && !message.second.isEmpty()) {
             out << message.first << "|||" << message.second << "\n";
         }
-        file.close();
     }
+    file.close();
 }
+
 
 QString MessageWindow::getChatFilePath()
 {
     QString dataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir().mkpath(dataPath);
-    return dataPath + "/" + username + "_chat.txt";
+    if (dataPath.isEmpty()) {
+        qWarning() << "Failed to get writable location";
+        return QString();
+    }
+
+    QDir dir(dataPath);
+    if (!dir.exists() && !dir.mkpath(".")) {
+        qWarning() << "Failed to create directory:" << dataPath;
+        return QString();
+    }
+
+    return dir.filePath(username + "_chat.txt");
 }
+
 
 void MessageWindow::clearChat()
 {
@@ -348,67 +378,84 @@ void MessageWindow::closeEvent(QCloseEvent *event)
 
 MessageWindow::~MessageWindow()
 {
+    // Save chat history before cleanup
     saveChatHistory();
+
+    // Explicitly delete dynamic allocations
+    if (emojiPanel) {
+        emojiPanel->close();
+    }
+
+    // Clear message history
+    messageHistory.clear();
 }
 void MessageWindow::createEmojiPanel()
 {
-    emojiPanel = new QWidget(nullptr);
-    emojiPanel->setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
+    emojiPanel.reset(new QWidget(nullptr));
+    emojiPanel->setWindowFlags(Qt::Popup);
+    emojiPanel->setFixedSize(200, 150);
 
-    QGridLayout *emojiLayout = new QGridLayout(emojiPanel);
-    emojiLayout->setSpacing(5);  // Increased spacing between emojis
-    emojiLayout->setContentsMargins(8, 8, 8, 8);  // Increased margins
+    QGridLayout *emojiLayout = new QGridLayout(emojiPanel.get());
+    emojiLayout->setSpacing(5);
 
-    // Initialize emoji map
-    emojiMap = {
-        {"smile", "😊"}, {"laugh", "😄"}, {"wink", "😉"},
-        {"heart", "❤️"}, {"thumbsup", "👍"}, {"clap", "👏"},
-        {"think", "🤔"}, {"cool", "😎"}, {"party", "🎉"},
-        {"sad", "😢"}, {"angry", "😠"}, {"love", "😍"}
+    QVector<QString> emojis = {
+        "😊", "😂", "😍", "🤔", "😎",
+        "👍", "❤️", "😢", "😄", "🎉",
+        "🌟", "🔥", "✨", "💪", "👏"
     };
 
-    int row = 0, col = 0;
-    for (auto it = emojiMap.begin(); it != emojiMap.end(); ++it) {
-        QPushButton *emojiBtn = new QPushButton(it.value());
-        emojiBtn->setFixedSize(40, 40);  // Increased button size
-        emojiBtn->setStyleSheet("QPushButton { border: none; background: transparent; font-size: 20px; }"); // Increased font size
+    int row = 0;
+    int col = 0;
+    for (const QString &emoji : emojis) {
+        QPushButton *emojiButton = new QPushButton(emoji);
+        emojiButton->setFixedSize(30, 30);
+        emojiButton->setStyleSheet("QPushButton { font-size: 16px; border: 1px solid #ccc; border-radius: 4px; } "
+                                   "QPushButton:hover { background-color: #e0e0e0; }");
 
-        connect(emojiBtn, &QPushButton::clicked, this, [this, emoji = it.value()]() {
+        connect(emojiButton, &QPushButton::clicked, this, [this, emoji]() {
             handleEmojiInsert(emoji);
+            emojiPanel->hide();
         });
 
-        emojiLayout->addWidget(emojiBtn, row, col);
+        emojiLayout->addWidget(emojiButton, row, col);
         col++;
-        if (col > 3) {
+        if (col >= 5) {
             col = 0;
             row++;
         }
     }
 
-    connect(emojiButton, &QPushButton::clicked, this, &MessageWindow::positionEmojiPanel);
+    emojiPanel->setLayout(emojiLayout);
 }
+
 
 
 
 void MessageWindow::setupContextMenu()
 {
+    contextMenu.reset(new QMenu(this));
+
+    // Add menu actions
+    contextMenu->addAction("Clear Chat", this, &MessageWindow::clearChat);
+    contextMenu->addAction("Export Chat", this, &MessageWindow::exportChat);
+    contextMenu->addSeparator();
+
+    // Theme submenu
+    QMenu *themeMenu = contextMenu->addMenu("Theme");
+    QAction *lightThemeAction = themeMenu->addAction("Light");
+    QAction *darkThemeAction = themeMenu->addAction("Dark");
+
+    connect(lightThemeAction, &QAction::triggered, this, [this]() { updateTheme(false); });
+    connect(darkThemeAction, &QAction::triggered, this, [this]() { updateTheme(true); });
+
+    // Set up context menu policy
     chatDisplay->setContextMenuPolicy(Qt::CustomContextMenu);
-    contextMenu = new QMenu(this);
-
-    QAction *copyAction = new QAction("Copy", this);
-    QAction *selectAllAction = new QAction("Select All", this);
-
-    contextMenu->addAction(copyAction);
-    contextMenu->addAction(selectAllAction);
-
-    connect(copyAction, &QAction::triggered, chatDisplay, &QTextEdit::copy);
-    connect(selectAllAction, &QAction::triggered, chatDisplay, &QTextEdit::selectAll);
-
-    connect(chatDisplay, &QTextEdit::customContextMenuRequested,
+    connect(chatDisplay, &QWidget::customContextMenuRequested,
             this, [this](const QPoint &pos) {
                 contextMenu->exec(chatDisplay->mapToGlobal(pos));
             });
 }
+
 void MessageWindow::positionEmojiPanel()
 {
     if (emojiPanel->isVisible()) {
@@ -421,9 +468,15 @@ void MessageWindow::positionEmojiPanel()
 }
 void MessageWindow::handleEmojiInsert(const QString &emoji)
 {
-    messageInput->insert(emoji);
-    emojiPanel->hide();
+    try {
+        QMutexLocker locker(&chatMutex);
+        messageInput->insert(emoji);
+        emojiPanel->hide();
+    } catch (const std::exception &e) {
+        qWarning() << "Error inserting emoji:" << e.what();
+    }
 }
+
 
 void MessageWindow::resizeEvent(QResizeEvent *event)
 {

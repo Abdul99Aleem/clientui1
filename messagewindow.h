@@ -18,6 +18,8 @@
 #include <QStandardPaths>
 #include <QMessageBox>
 #include <QCloseEvent>
+#include <QScopedPointer>
+#include <QMutex>
 
 class MessageWindow : public QWidget {
     Q_OBJECT
@@ -82,18 +84,20 @@ private:
     QPushButton *attachButton;
     QPushButton *clearButton;
     QPushButton *exportButton;
+    QMutex chatMutex;
 
-    QWidget *emojiPanel;
-    QMenu *contextMenu;
+    QScopedPointer<QWidget> emojiPanel;
+    QScopedPointer<QMenu> contextMenu;
 
     // Message History
     QList<QPair<QString, QString>> messageHistory;
     QMap<QString, QString> emojiMap;
 
     // Constants
-    const int MAX_MESSAGE_LENGTH = 1000;
-    const int MAX_HISTORY_SIZE = 1000;
-    const QString DATE_FORMAT = "yyyy-MM-dd hh:mm:ss";
+    static const int MAX_MESSAGE_LENGTH = 1000;
+    static const int MAX_HISTORY_SIZE = 1000;
+    static const int MAX_EMOJI_COUNT = 12;
+    static const char* DATE_FORMAT;
 };
 
 #endif // MESSAGEWINDOW_H
