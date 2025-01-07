@@ -23,6 +23,9 @@
 #include <messagewindow.h>
 #include <QStackedLayout>
 #include <QStackedWidget>
+#include <QAudioDevice>
+#include <QMediaDevices>
+
 
 struct ClientData {
     QString username;
@@ -60,6 +63,7 @@ public slots:
     void removeMessageWindow(const QString &username);
     void showHomeScreen();
     void showMessageScreen(const QString &username);
+    void handleServerUpdate(const QByteArray &data);
 
 private:
     void setupCallLayouts();
@@ -135,6 +139,10 @@ private:
     QListWidget *clientList;
     QList<ClientData> clients;
     QString currentClient;
+
+    QAudioDevice audioDevice;
+    QSlider *volumeSlider;
+    void handleVolumeChange(int value);
 };
 
 #endif // CLIENTLIST

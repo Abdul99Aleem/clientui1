@@ -25,6 +25,10 @@
 #include <QStandardPaths>
 #include <QSettings>
 #include <QPainter>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 
 ClientWindow::ClientWindow(MainWindow *mainwindow, QWidget *parent)
     : QMainWindow(parent), mainWindow(mainwindow)
@@ -46,18 +50,19 @@ ClientWindow::ClientWindow(MainWindow *mainwindow, QWidget *parent)
     setupCallLayouts();
 
     // Volume slider setup
-    QSlider *volumeSlider = new QSlider(Qt::Horizontal, this);
+    volumeSlider = new QSlider(Qt::Horizontal, this);  // Change to member variable
     volumeSlider->setRange(0, 100);
     volumeSlider->setValue(50);
     volumeSlider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     volumeSlider->setTickInterval(10);
     volumeSlider->setTickPosition(QSlider::TicksBelow);
+    connect(volumeSlider, &QSlider::valueChanged, this, &ClientWindow::handleVolumeChange);
 
-    // Top box setup
+    // Top box setup with proper initial connection status
     clientStatusCircle = new QLabel(this);
     clientStatusCircle->setFixedSize(25, 25);
-    clientStatusCircle->setStyleSheet("border-radius: 12px; background-color: green;");
-    clientName = new QLabel("1001", this);
+    clientStatusCircle->setStyleSheet("border-radius: 12px; background-color: red;");
+    clientName = new QLabel("Not Connected to Server", this);
     themeBtn = new QPushButton("Dark/Light Mode", this);
     exitBtn = new QPushButton("Exit", this);
     logout = new QPushButton("Logout", this);
@@ -70,11 +75,7 @@ ClientWindow::ClientWindow(MainWindow *mainwindow, QWidget *parent)
     topBox->addWidget(logout, 1);
 
     // Client list setup
-    clients.append({"phone1", "1001", "Online"});
-    clients.append({"phone2", "1002", "Offline"});
-    clients.append({"phone3", "1003", "Busy"});
     clientList = new QListWidget(this);
-    populateList();
 
     // Create left panel
     QWidget *leftPanel = new QWidget(this);
@@ -117,6 +118,9 @@ ClientWindow::ClientWindow(MainWindow *mainwindow, QWidget *parent)
     exitBtn->setMinimumHeight(40);
     logout->setMinimumHeight(40);
 }
+
+
+
 void ClientWindow::setupCallLayouts() {
     // No call layout
     noCallWidget = new QWidget(this);
@@ -457,6 +461,31 @@ void ClientWindow::onOngoingCall()
     switchToLayout(2);
     ongoingClientLabel->setText(currentClient);
 }
+
+void ClientWindow::handleServerUpdate(const QByteArray &data) {
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (doc.isArray()) {
+        QJsonArray clientArray = doc.array();
+        clientList->clear();
+
+        for (const QJsonValue &value : clientArray) {
+            QJsonObject clientObj = value.toObject();
+            QString clientName = clientObj["name"].toString();
+            QString status = clientObj["status"].toString(); // "Online", "Offline", "Busy"
+
+            QWidget *clientWidget = new ClientWidget(clientName, status, this);
+            QListWidgetItem *item = new QListWidgetItem(clientList);
+            item->setSizeHint(clientWidget->sizeHint());
+            clientList->setItemWidget(item, clientWidget);
+        }
+    }
+}
+
+void ClientWindow::handleVolumeChange(int value) {
+    QString command = QString("amixer -c 0 sset Master %1%").arg(value);
+    system(command.toStdString().c_str());
+}
+
 
 
 ClientWindow::~ClientWindow() {
