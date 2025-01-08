@@ -2,9 +2,14 @@
 #include "clientwidget.h"
 #include <QPainter>
 
-ClientWidget::ClientWidget(const QString &username, const QString &status, QWidget *parent)
-    : QWidget(parent), clientUsername(username)
+ClientWidget::ClientWidget(const QString &username, const QString &dialplan, const QString &password, const QString &status, QWidget *parent)
+    : QWidget(parent), username(username), dialplan(dialplan), password(password), status(status)
 {
+    this->username = username;
+    this->dialplan = dialplan;
+    this->password = password;
+    this->status = status;
+
     // Initialize components
     statusCircle = new QLabel(this);
     usernameLabel = new QLabel(username, this);
@@ -60,4 +65,8 @@ void ClientWidget::updateStatusCircle(const QString &status)
     painter.setPen(Qt::NoPen);
     painter.drawEllipse(0, 0, 20, 20);
     statusCircle->setPixmap(pixmap);
+}
+
+ClientWidget::~ClientWidget() {
+    // Cleanup if needed
 }

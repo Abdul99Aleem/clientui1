@@ -1,3 +1,4 @@
+//main.cpp
 #include "mainwindow.h"
 #include "conferancecallwindow.h"
 #include "clientwindow.h"

@@ -2,11 +2,15 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "clientwindow.h"
+#include "clientwidget.h"
 #include <QFile>
 #include <QTextStream>
 #include <QDir>
 #include <QSettings>
 #include <QDebug>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonValue>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -36,6 +40,14 @@ MainWindow::MainWindow(QWidget *parent)
         IPaddr->setText(savedIPaddr);
         rememberMe->setChecked(true);
     }
+
+    // Initialize WebSocket
+    webSocket = new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this);
+    connect(webSocket, &QWebSocket::connected, this, &MainWindow::onWebSocketConnected);
+    connect(webSocket, &QWebSocket::textMessageReceived, this, &MainWindow::onWebSocketMessageReceived);
+    webSocket->open(QUrl("ws://localhost:12345")); // Replace with your server URL
+    clientList = new QListWidget(this);
+    setCentralWidget(clientList);
 
     SignInButton = new QPushButton("Sign in", this);
     connect(SignInButton, &QPushButton::clicked, this, &MainWindow::validateInputs);
@@ -190,6 +202,40 @@ QString MainWindow::getPassword() const
 QString MainWindow::getIPaddr() const
 {
     return IPaddr->text();
+}
+
+void MainWindow::onWebSocketConnected() {
+    qDebug() << "Connected to WebSocket server";
+}
+
+void MainWindow::onWebSocketMessageReceived(const QString &message) {
+    qDebug() << "Message received:" << message;
+    QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
+    if (doc.isArray()) {
+        QJsonArray clientArray = doc.array();
+        QList<ClientData> clients;
+        for (const QJsonValue &value : clientArray) {
+            clients.append(ClientData{value.toString(), "", "", "OFFLINE"});
+        }
+        populateClientList(clients); // Update the UI with the new client list
+    }
+}
+
+void MainWindow::populateClientList(const QList<ClientData> &clients) {
+    clientList->clear();
+    for (const ClientData &client : clients) {
+        ClientWidget *widget = new ClientWidget(
+            client.username,
+            client.dialplan,
+            client.password,
+            client.status,
+            this
+            );
+        QListWidgetItem *item = new QListWidgetItem(clientList);
+        item->setSizeHint(widget->sizeHint());
+        clientList->addItem(item);
+        clientList->setItemWidget(item, widget);
+    }
 }
 
 MainWindow::~MainWindow()

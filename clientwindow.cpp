@@ -473,7 +473,7 @@ void ClientWindow::handleServerUpdate(const QByteArray &data) {
             QString clientName = clientObj["name"].toString();
             QString status = clientObj["status"].toString(); // "Online", "Offline", "Busy"
 
-            QWidget *clientWidget = new ClientWidget(clientName, status, this);
+            QWidget *clientWidget = new ClientWidget(clientName, "", "", status, this);
             QListWidgetItem *item = new QListWidgetItem(clientList);
             item->setSizeHint(clientWidget->sizeHint());
             clientList->setItemWidget(item, clientWidget);

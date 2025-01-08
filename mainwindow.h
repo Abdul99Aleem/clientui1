@@ -5,6 +5,8 @@
 
 #include <QMainWindow>
 #include <QDialog>
+#include <QWebSocket>
+#include <QListWidget>
 #include <QLineEdit>
 #include <QLabel>
 #include <QPushButton>
@@ -12,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QCheckBox>
 #include <clientwindow.h>
+#include "clientdata.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -51,6 +54,13 @@ private:
 
     bool isValidIPAddress(const QString &ip);
 
+    QWebSocket *webSocket;
+    QListWidget *clientList;
+    void populateClientList(const QList<ClientData> &clients);
+
+private slots:
+    void onWebSocketConnected();
+    void onWebSocketMessageReceived(const QString &message);
 
 };
 #endif // MAINWINDOW_H

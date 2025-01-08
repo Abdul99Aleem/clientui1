@@ -18,6 +18,7 @@
 #include <QRegularExpressionMatch>
 #include <QProcess>
 #include "mainwindow.h"
+#include "clientdata.h"
 #include <QSlider>
 #include "conferancecallwindow.h"
 #include <messagewindow.h>
@@ -25,13 +26,6 @@
 #include <QStackedWidget>
 #include <QAudioDevice>
 #include <QMediaDevices>
-
-
-struct ClientData {
-    QString username;
-    QString dialplan;
-    QString status;
-};
 
 class ConferanceCallWindow;
 class MainWindow;

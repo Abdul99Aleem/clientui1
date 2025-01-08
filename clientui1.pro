@@ -1,4 +1,5 @@
-QT       += core gui multimedia
+QT       += core gui multimedia websockets \
+    quick
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -14,6 +15,7 @@ SOURCES += \
     messagewindow.cpp
 
 HEADERS += \
+    clientdata.h \
     mainwindow.h \
     clientwindow.h \
     clientwidget.h \

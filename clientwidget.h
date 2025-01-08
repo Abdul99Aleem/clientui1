@@ -12,7 +12,8 @@ class ClientWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit ClientWidget(const QString &username, const QString &status, QWidget *parent = nullptr);
+    explicit ClientWidget(const QString &username, const QString &dialplan, const QString &password, const QString &status, QWidget *parent = nullptr);
+    ~ClientWidget();
 
 signals:
     void callButtonClicked(const QString &username);
@@ -22,6 +23,10 @@ private slots:
     void onCallButtonClicked();
 
 private:
+    QString username;
+    QString dialplan;
+    QString password;
+    QString status;
     void updateStatusCircle(const QString &status);
     QPushButton *messageButton;
     void onMessageButtonClicked();
