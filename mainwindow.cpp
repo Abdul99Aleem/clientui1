@@ -11,6 +11,9 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QJsonObject>
+
+
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -204,21 +207,38 @@ QString MainWindow::getIPaddr() const
     return IPaddr->text();
 }
 
-void MainWindow::onWebSocketConnected() {
+void MainWindow::onWebSocketConnected()
+{
     qDebug() << "Connected to WebSocket server";
+
+    // Add a WebSocket error handler
+    connect(webSocket, &QWebSocket::errorOccurred, this, [](QAbstractSocket::SocketError error) {
+        qWarning() << "WebSocket error occurred:" << error;
+    });
+
 }
 
-void MainWindow::onWebSocketMessageReceived(const QString &message) {
+void MainWindow::onWebSocketMessageReceived(const QString &message)
+{
     qDebug() << "Message received:" << message;
+
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
-    if (doc.isArray()) {
-        QJsonArray clientArray = doc.array();
-        QList<ClientData> clients;
-        for (const QJsonValue &value : clientArray) {
-            clients.append(ClientData{value.toString(), "", "", "OFFLINE"});
-        }
-        populateClientList(clients); // Update the UI with the new client list
+    if (!doc.isArray()) {
+        qWarning() << "Invalid JSON data received";
+        return;
     }
+
+    QJsonArray clientArray = doc.array();
+    QList<ClientData> clients;
+    for (const QJsonValue &value : clientArray) {
+        QJsonObject clientObj = value.toObject();
+        QString clientName = clientObj.value("name").toString();
+        QString clientStatus = clientObj.value("status").toString();
+
+        clients.append(ClientData{clientName, "", "", clientStatus});
+    }
+
+    populateClientList(clients);
 }
 
 void MainWindow::populateClientList(const QList<ClientData> &clients) {

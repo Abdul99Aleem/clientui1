@@ -58,15 +58,16 @@ void ClientWidget::updateStatusCircle(const QString &status)
         color = Qt::red;
     else if (status == "Busy")
         color = Qt::yellow;
-    else
-        color = Qt::gray;
+    else {
+        color = Qt::blue; // Default to blue for unsupported statuses
+        qWarning() << "Unknown status received:" << status;
+    }
 
     painter.setBrush(color);
     painter.setPen(Qt::NoPen);
     painter.drawEllipse(0, 0, 20, 20);
     statusCircle->setPixmap(pixmap);
 }
-
 ClientWidget::~ClientWidget() {
     // Cleanup if needed
 }

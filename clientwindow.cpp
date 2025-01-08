@@ -462,22 +462,27 @@ void ClientWindow::onOngoingCall()
     ongoingClientLabel->setText(currentClient);
 }
 
-void ClientWindow::handleServerUpdate(const QByteArray &data) {
+void ClientWindow::handleServerUpdate(const QByteArray &data)
+{
     QJsonDocument doc = QJsonDocument::fromJson(data);
-    if (doc.isArray()) {
-        QJsonArray clientArray = doc.array();
-        clientList->clear();
+    if (!doc.isArray()) {
+        qWarning() << "Invalid server data format.";
+        return;
+    }
 
-        for (const QJsonValue &value : clientArray) {
-            QJsonObject clientObj = value.toObject();
-            QString clientName = clientObj["name"].toString();
-            QString status = clientObj["status"].toString(); // "Online", "Offline", "Busy"
+    QJsonArray clientArray = doc.array();
+    clientList->clear();
 
-            QWidget *clientWidget = new ClientWidget(clientName, "", "", status, this);
-            QListWidgetItem *item = new QListWidgetItem(clientList);
-            item->setSizeHint(clientWidget->sizeHint());
-            clientList->setItemWidget(item, clientWidget);
-        }
+    for (const QJsonValue &value : clientArray) {
+        QJsonObject clientObj = value.toObject();
+        QString clientName = clientObj["name"].toString();
+        QString status = clientObj["status"].toString(); // "Online", "Offline", "Busy"
+
+        // Create a new ClientWidget for each client
+        QWidget *clientWidget = new ClientWidget(clientName, "", "", status, this);
+        QListWidgetItem *item = new QListWidgetItem(clientList);
+        item->setSizeHint(clientWidget->sizeHint());
+        clientList->setItemWidget(item, clientWidget);
     }
 }
 
