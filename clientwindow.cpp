@@ -12,6 +12,7 @@
 #include <QDebug>
 #include <QInputDialog>
 #include <QFile>
+#include <QTimer>
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
 #include <QProcess>
@@ -29,6 +30,9 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QMediaDevices>
+#include <QAudioSource>
+#include <QAudioFormat>
 
 ClientWindow::ClientWindow(MainWindow *mainwindow, QWidget *parent)
     : QMainWindow(parent), mainWindow(mainwindow)
@@ -118,8 +122,6 @@ ClientWindow::ClientWindow(MainWindow *mainwindow, QWidget *parent)
     exitBtn->setMinimumHeight(40);
     logout->setMinimumHeight(40);
 }
-
-
 
 void ClientWindow::setupCallLayouts() {
     // No call layout
@@ -491,24 +493,136 @@ void ClientWindow::handleVolumeChange(int value) {
     system(command.toStdString().c_str());
 }
 
+void ClientWindow::handleWebSocketDisconnection() {
+    clientStatusCircle->setStyleSheet("background-color: red;");
+    clientName->setText("Disconnected - Attempting to reconnect...");
+    clientList->clear();
 
+    const int RECONNECT_INTERVAL = 5000;
+    QTimer::singleShot(RECONNECT_INTERVAL, this, [this]() {
+        if (webSocket) {
+            webSocket->open(QUrl("ws://localhost:12345"));
+        }
+    });
+}
+
+void ClientWindow::handleWebSocketError(QAbstractSocket::SocketError error) {
+    QString errorMessage = QString("Connection error: %1 (Code: %2)")
+    .arg(webSocket->errorString())
+        .arg(static_cast<int>(error));
+    clientName->setText(errorMessage);
+    handleWebSocketDisconnection();
+}
+
+bool ClientWindow::initializeAudioDevice() {
+    const auto devices = QMediaDevices::audioInputs();
+    if (!devices.isEmpty()) {
+        audioFormat.setSampleRate(48000);
+        audioFormat.setChannelCount(2);
+
+        const QAudioDevice &defaultDevice = QMediaDevices::defaultAudioInput();
+        if (!defaultDevice.isFormatSupported(audioFormat)) {
+            QMessageBox::warning(this, "Audio Error", "Default format not supported");
+            return false;
+        }
+
+        audioDevice = new QAudioSource(defaultDevice, audioFormat, this);
+        return true;
+    }
+
+    QMessageBox::critical(this, "Audio Error", "No audio input device found");
+    return false;
+}
+
+
+// Add these implementations
+void ClientWindow::onWebSocketConnected() {
+    clientStatusCircle->setStyleSheet("background-color: green;");
+    clientName->setText("Connected");
+}
+
+void ClientWindow::onWebSocketDisconnected() {
+    handleWebSocketDisconnection();
+}
+
+void ClientWindow::initializeWebSocket() {
+    webSocket = new QWebSocket();
+    connect(webSocket, &QWebSocket::connected, this, &ClientWindow::onWebSocketConnected);
+    connect(webSocket, &QWebSocket::disconnected, this, &ClientWindow::onWebSocketDisconnected);
+    connect(webSocket, &QWebSocket::errorOccurred, this, &ClientWindow::handleWebSocketError);
+    webSocket->open(QUrl("ws://localhost:12345"));
+}
+
+
+
+void ClientWindow::handleHardwareErrors() {
+    if (audioDevice) {
+        connect(audioDevice, &QAudioSource::stateChanged, this,
+                [this](QAudio::State state) {
+                    if (state == QAudio::StoppedState) {
+                        if (audioDevice->error() != QAudio::NoError) {
+                            QString errorStr = QString("Audio error occurred");
+                            QMessageBox::warning(this, "Hardware Error", errorStr);
+                            initializeAudioDevice();
+                        }
+                    }
+                });
+    }
+}
 
 ClientWindow::~ClientWindow() {
-    // Clean up message windows
+    // Clean up message windows with proper Qt parent-child cleanup
     for (auto window : messageWindows) {
         window->deleteLater();
     }
     messageWindows.clear();
 
-    // Clean up other widgets
+    // WebSocket cleanup
+    if (webSocket) {
+        webSocket->close();
+        delete webSocket;
+        webSocket = nullptr;
+    }
+
+    // Audio device cleanup
+    if (audioDevice) {
+        audioDevice->stop();
+        delete audioDevice;
+        audioDevice = nullptr;
+    }
+
+    // Reset system volume
+    system("amixer -c 0 sset Master 50%");
+
+    // UI widgets cleanup - setting nullptr after deletion
     delete mainWidget;
+    mainWidget = nullptr;
+
     delete clientStatusCircle;
+    clientStatusCircle = nullptr;
+
     delete clientName;
+    clientName = nullptr;
+
     delete themeBtn;
+    themeBtn = nullptr;
+
     delete exitBtn;
+    exitBtn = nullptr;
+
     delete logout;
+    logout = nullptr;
+
     delete clientList;
+    clientList = nullptr;
+
     delete conferencePanel;
+    conferencePanel = nullptr;
+
     delete selectAllCheckbox;
+    selectAllCheckbox = nullptr;
+
     delete startConferenceBtn;
+    startConferenceBtn = nullptr;
 }
+

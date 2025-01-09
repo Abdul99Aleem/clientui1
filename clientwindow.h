@@ -14,6 +14,7 @@
 #include <QDebug>
 #include <QInputDialog>
 #include <QFile>
+#include <QTimer>
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
 #include <QProcess>
@@ -26,6 +27,7 @@
 #include <QStackedWidget>
 #include <QAudioDevice>
 #include <QMediaDevices>
+#include <QAudioSource>
 
 class ConferanceCallWindow;
 class MainWindow;
@@ -76,6 +78,15 @@ private:
     void initiateConferenceCall(const QList<QString>& participants);
     void toggleConferenceMode();
     QPixmap getStatusIcon(const QString &status);
+
+    QWebSocket *webSocket;
+    void initializeWebSocket();
+    void onWebSocketConnected();
+    void onWebSocketDisconnected();
+    void handleWebSocketDisconnection();
+    bool initializeAudioDevice();
+    void handleHardwareErrors();
+    void handleWebSocketError(QAbstractSocket::SocketError error);
 
     // Message window related
     QMap<QString, MessageWindow*> messageWindows;
@@ -134,7 +145,9 @@ private:
     QList<ClientData> clients;
     QString currentClient;
 
-    QAudioDevice audioDevice;
+    QAudioSource *audioDevice;
+    QAudioFormat audioFormat;
+    QMediaDevices *mediaDevices;
     QSlider *volumeSlider;
     void handleVolumeChange(int value);
 };
